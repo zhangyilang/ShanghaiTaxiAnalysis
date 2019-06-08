@@ -49,23 +49,108 @@ class Query:
         :param ru: a tuple of (longitude_right, latitude_up)
         :return: (x, y) for drawing bars
         '''
-        geo_range = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0]) & (self.df.latitude >= ld[1])
-                             & (self.df.latitude <= ru[1])) if ld is not None and ru is not None else self.df
-        result = geo_range.select('speed', F.from_unixtime(F.unix_timestamp('time'), 'HH').alias('hour')).dropna()\
+        geo_range = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0])
+                                   & (self.df.latitude >= ld[1]) & (self.df.latitude <= ru[1]))\
+            if ld is not None and ru is not None else self.df
+        data = geo_range.select('speed', F.from_unixtime(F.unix_timestamp('time'), 'HH').alias('hour')).dropna()\
             .groupBy('hour').agg({'speed': 'mean'}).sort('hour').collect()
         x = list(range(24))
-        y = [r['avg(speed)'] for r in result]
+        y = [r['avg(speed)'] for r in data]
         return x, y
 
-    def plot_bar(self, x, y):
+    def roundMap_speed(self, row):
+        # round to 3 decimal places
+        return (row.hour, round(float(row.longitude), 3), round(float(row.latitude), 3)), [row.speed, 1]
+
+    def speedMap(self, data):
+        (hour, lon, lat), speed = data
+        speed = speed[0] / speed[1] / 30 / 100
+        return hour, [lat, lon, speed]
+
+    def average_speed_hotmap(self, ld=None, ru=None):
+        '''
+        Hot map version of average speed.
+        :param ld:  a tuple of (longitude_left, latitude_down)
+        :param ru:  a tuple of (longitude_right, latitude_up)
+        :return: [[[latitude, longitude, average_speed]]] for each hour for each location
+        '''
+        geoRange = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0])
+                                  & (self.df.latitude >= ld[1]) & (self.df.latitude <= ru[1]))\
+            if ld is not None and ru is not None else self.df
+        data = geoRange.select('speed', 'longitude', 'latitude', F.from_unixtime(F.unix_timestamp('time'), 'HH')
+                 .alias('hour')).dropna().rdd.map(self.roundMap).reduceByKey(lambda x, y: [x[0] + y[0], x[1] + y[1]])\
+                 .map(self.speedMap).groupByKey().map(lambda x: list(x[1])).collect()
+        return data
+
+    def average_occupy_bar(self, ld=None, ru=None):
+        '''
+        A function return the average occupied rate of taxis in Shanghai
+        through the whole day within designated geographical range.
+        Look up through all the data if one of parameters is None (default).
+        :param ld: a tuple of (longitude_left, latitude_down)
+        :param ru: a tuple of (longitude_right, latitude_up)
+        :return: (x, y) for drawing bars
+        '''
+
+        geoRange = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0]) & (self.df.latitude >= ld[1])\
+                   & (self.df.latitude <= ru[1])) if ld is not None and ru is not None else self.df
+        data = geoRange.select('passenger', F.from_unixtime(F.unix_timestamp('time'), 'HH').alias('hour'))\
+                 .dropna().groupBy('hour').agg({'passenger': 'mean'}).sort('hour').collect()
+        x = list(range(24))
+        y = [r['avg(passenger)'] for r in data]
+        return x, y
+
+    def roundMap_passenger(self, row):
+        # round to 3 decimal places
+        return (row.hour, round(float(row.longitude), 3), round(float(row.latitude), 3)), [row.passenger, 1]
+
+    def passengerMap(self, data):
+        (hour, lon, lat), passenger = data
+        passenger = passenger[0] / passenger[1] / 100
+        return hour, [lat, lon, passenger]
+
+    def average_occupy_hotmap(self, ld=None, ru=None):
+        '''
+        Hot map version of taxi occupy ratio.
+        :param ld:  a tuple of (longitude_left, latitude_down)
+        :param ru:  a tuple of (longitude_right, latitude_up)
+        :return: [[[latitude, longitude, average_speed]]] for each hour for each location
+        '''
+        geoRange = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0])
+                                  & (self.df.latitude >= ld[1]) & (self.df.latitude <= ru[1]))\
+            if ld is not None and ru is not None else self.df
+        data = geoRange.select('passenger', 'longitude', 'latitude', F.from_unixtime(F.unix_timestamp('time'), 'HH')
+                 .alias('hour')).dropna().rdd.map(self.roundMap_passenger).reduceByKey(lambda x, y: [x[0] + y[0], x[1] + y[1]])\
+                 .map(self.passengerMap).groupByKey().map(lambda x: list(x[1])).collect()
+        return data
+
+    def plot_bar(self, x, y, label_x, label_y):
+        '''
+        Plot bar figure using matplotlib.
+        :param x: iterable, data for x axis
+        :param y: iterable, data for y axis
+        :param label_x: str, label for x axis
+        :param label_y: str, label for y axis
+        :return:
+        '''
         plt.bar(x, y)
-        plt.xlabel('time: h')
-        plt.ylabel('average speed: km/h')
+        plt.xlabel(label_x)
+        plt.ylabel(label_y)
         plt.show()
+
+    def generage_hotmap(self, data):
+        '''
+        Generate dynamic hotmap with input data and save as a html file.
+        :param data: a 3-d list of [[[latitude, longitude, average_speed]]] for each hour for each location
+        :return: no return
+        '''
+        map_osm = folium.Map(location=[31.2234, 121.4814], zoom_start=10)
+        HeatMapWithTime(data, radius=10).add_to(map_osm)
+        map_osm.save('figures/hotmap.html')
 
 
 if __name__ == '__main__':
     # tests
     query = Query()
-    x, y = query.average_speed_bar()
-    query.plot_bar(x, y)
+    x, y =query.average_occupy_bar()
+    query.plot_bar(x, y, 'time: h', 'average occupy: ratio')
