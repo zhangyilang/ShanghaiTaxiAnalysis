@@ -1,12 +1,14 @@
+import os
+import matplotlib.pyplot as plt
 from pyspark import SparkConf, SparkContext
 from pyspark.sql import SQLContext, SparkSession, Row
 import pyspark.sql.functions as F
-import os
 import folium
 from folium.plugins import HeatMapWithTime
 
 os.environ['PYSPARK_PYTHON'] = '/home/bigdatalab24/anaconda3/bin/python'
 os.environ['PYSPARK_DRIVER_PYTHON'] = '/home/bigdatalab24/anaconda3/bin/python'
+
 
 class Query:
     def __init__(self):
@@ -38,24 +40,32 @@ class Query:
         self.sc.stop()
         self.spark.stop()
 
-    def average_speed_hist(self, ld=None, ru=None):
+    def average_speed_bar(self, ld=None, ru=None):
         '''
         A function return the average speed of taxi drivers in Shanghai
         through the whole day within designated geographical range.
         Look up through all the data if one of parameters is None (default).
         :param ld: a tuple of (longitude_left, latitude_down)
         :param ru: a tuple of (longitude_right, latitude_up)
-        :return: a list of [time, average_speed]
+        :return: (x, y) for drawing bars
         '''
         geo_range = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0]) & (self.df.latitude >= ld[1])
                              & (self.df.latitude <= ru[1])) if ld is not None and ru is not None else self.df
         result = geo_range.select('speed', F.from_unixtime(F.unix_timestamp('time'), 'HH').alias('hour')).dropna()\
             .groupBy('hour').agg({'speed': 'mean'}).sort('hour').collect()
-        return result
+        x = list(range(24))
+        y = [r['avg(speed)'] for r in result]
+        return x, y
+
+    def plot_bar(self, x, y):
+        plt.bar(x, y)
+        plt.xlabel('time: h')
+        plt.ylabel('average speed: km/h')
+        plt.show()
 
 
 if __name__ == '__main__':
     # tests
     query = Query()
-    h = query.average_speed_hist()
-    print(h)
+    x, y = query.average_speed_bar()
+    query.plot_bar(x, y)
