@@ -58,11 +58,13 @@ class Query:
         y = [r['avg(speed)'] for r in data]
         return x, y
 
-    def roundMap_speed(self, row):
+    @staticmethod
+    def roundMap_speed(row):
         # round to 3 decimal places
         return (row.hour, round(float(row.longitude), 3), round(float(row.latitude), 3)), [row.speed, 1]
 
-    def speedMap(self, data):
+    @staticmethod
+    def speedMap(data):
         (hour, lon, lat), speed = data
         speed = speed[0] / speed[1] / 30 / 100
         return hour, [lat, lon, speed]
@@ -77,9 +79,9 @@ class Query:
         geoRange = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0])
                                   & (self.df.latitude >= ld[1]) & (self.df.latitude <= ru[1]))\
             if ld is not None and ru is not None else self.df
-        data = geoRange.select('speed', 'longitude', 'latitude', F.from_unixtime(F.unix_timestamp('time'), 'HH')
-                 .alias('hour')).dropna().rdd.map(self.roundMap).reduceByKey(lambda x, y: [x[0] + y[0], x[1] + y[1]])\
-                 .map(self.speedMap).groupByKey().map(lambda x: list(x[1])).collect()
+        data = geoRange.select('speed', 'longitude', 'latitude', F.from_unixtime(F.unix_timestamp('time'), 'HH').alias('hour'))\
+                .dropna().rdd.map(self.roundMap_speed).reduceByKey(lambda x, y: [x[0] + y[0], x[1] + y[1]])\
+                .map(self.speedMap).groupByKey().map(lambda x: list(x[1])).collect()
         return data
 
     def average_occupy_bar(self, ld=None, ru=None):
@@ -100,11 +102,13 @@ class Query:
         y = [r['avg(passenger)'] for r in data]
         return x, y
 
-    def roundMap_passenger(self, row):
+    @staticmethod
+    def roundMap_passenger(row):
         # round to 3 decimal places
         return (row.hour, round(float(row.longitude), 3), round(float(row.latitude), 3)), [row.passenger, 1]
 
-    def passengerMap(self, data):
+    @staticmethod
+    def passengerMap(data):
         (hour, lon, lat), passenger = data
         passenger = passenger[0] / passenger[1] / 100
         return hour, [lat, lon, passenger]
@@ -146,11 +150,14 @@ class Query:
         '''
         map_osm = folium.Map(location=[31.2234, 121.4814], zoom_start=10)
         HeatMapWithTime(data, radius=10).add_to(map_osm)
-        map_osm.save('figures/hotmap.html')
+        map_osm.save('hotmap.html')
 
 
 if __name__ == '__main__':
     # tests
     query = Query()
-    x, y =query.average_occupy_bar()
-    query.plot_bar(x, y, 'time: h', 'average occupy: ratio')
+    # x, y =query.average_occupy_bar()
+    # query.plot_bar(x, y, 'time: h', 'average occupy: ratio')
+    data = query.average_speed_hotmap()
+    query.generage_hotmap(data)
+    del query
