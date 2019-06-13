@@ -319,16 +319,21 @@ class Query:
                                                      duration=p[1][2].days * 60 * 24 + p[1][2].seconds/60,
                                                      downLon=p[1][3][0], downLat=p[1][3][1]))
         onRecordDF = self.spark.createDataFrame(onRecordDF)
+
+        # generate feature vector
+        assembler = VectorAssembler(inputCols=['upLon', 'upLat', 'downLon', 'downLat', 'upTime'], outputCol='features')
+        onRecordDF = assembler.transform(onRecordDF)
         onRecordDF.show(5)
         trainSet, validSet, testSet = onRecordDF.randomSplit([7., 1., 2.])
-        assembler = VectorAssembler(inputCols=['upLon', 'upLat', 'downLon', 'downLat', 'upTime'], outputCol='features')
+
+        # train model
         lr = LinearRegression(labelCol='duration', regParam=0.01, maxIter=10)
-        pipeline = Pipeline(stages=[assembler, lr])
-        self.model = pipeline.fit(trainSet)
+        self.model = lr.fit(trainSet)
         train_summary = self.model.summary
         print('RMSE of training:', train_summary.rootMeanSquaredError, 'min')
         print('Adjusted R2 of training:', train_summary.r2adj)
 
+        # evaluation
         evaluator = RegressionEvaluator(labelCol='duration')
         model_valid = self.model.transform(validSet)
         print('RMSE on validation set:', evaluator.evaluate(model_valid, {evaluator.metricName: 'rmse'}), 'min')
