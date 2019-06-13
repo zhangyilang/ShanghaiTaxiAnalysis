@@ -327,7 +327,7 @@ class Query:
         trainSet, validSet, testSet = onRecordDF.randomSplit([7., 1., 2.])
 
         # train model
-        lr = LinearRegression(labelCol='duration', regParam=0.01, maxIter=10)
+        lr = LinearRegression(labelCol='duration', regParam=0.01, maxIter=100)
         self.model = lr.fit(trainSet)
         train_summary = self.model.summary
         print('RMSE of training:', train_summary.rootMeanSquaredError, 'min')
