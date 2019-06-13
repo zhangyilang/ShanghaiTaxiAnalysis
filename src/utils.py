@@ -1,4 +1,8 @@
 import datetime
+import matplotlib.pyplot as plt
+import folium
+from folium.plugins import HeatMapWithTime
+from pyspark.mllib.regression import LabeledPoint
 
 
 def processTime(line):
@@ -128,6 +132,76 @@ def intensityMap(line):
     hour = datetime2hour(line[9])
     lon = round(line[10], 3)
     lat = round(line[11], 3)
-    #coordinate = (lon, lat)
-    return ((hour, lon, lat), 1)
+    # coordinate = (lon, lat)
+    return (hour, lon, lat), 1
 
+
+def roundMap_speed(row):
+    # round to 3 decimal places
+    return (row.hour, round(float(row.longitude), 3), round(float(row.latitude), 3)), [row.speed, 1]
+
+
+def speedMap(data):
+    (hour, lon, lat), speed = data
+    speed = speed[0] / speed[1] / 30 / 100
+    return hour, [lat, lon, speed]
+
+
+def roundMap_passenger(row):
+    # round to 3 decimal places
+    return (row.hour, round(float(row.longitude), 3), round(float(row.latitude), 3)), [row.passenger, 1]
+
+
+def passengerMap(data):
+    (hour, lon, lat), passenger = data
+    passenger = passenger[0] / passenger[1] / 100
+    return hour, [lat, lon, passenger]
+
+
+def tourTimeMap(record):
+    car, upTime, upCoord, downCoord = record[0], record[1][1], record[1][0], record[1][3]
+    hour, minute = upTime[-8:-3].split(':')
+    label = record[1][2].seconds
+    features = [car, float(hour)+float(minute)/60, upCoord[0], upCoord[1], downCoord[0], downCoord[1]]
+    return LabeledPoint(label, features)
+
+
+def plot_curve(x, y, label_x, label_y):
+    '''
+    Plot broken line figure with matplotlib. Used for granularity of minute.
+    :param x:
+    :param y:
+    :param label_x:
+    :param label_y:
+    :return:
+    '''
+    plt.plot(x, y)
+    plt.xlabel(label_x)
+    plt.ylabel(label_y)
+    plt.show()
+
+
+def plot_bar(x, y, label_x, label_y):
+    '''
+    Plot bar figure with matplotlib. Used for granularity of hour.
+    :param x: iterable, data for x axis
+    :param y: iterable, data for y axis
+    :param label_x: str, label for x axis
+    :param label_y: str, label for y axis
+    :return:
+    '''
+    plt.bar(x, y)
+    plt.xlabel(label_x)
+    plt.ylabel(label_y)
+    plt.show()
+
+
+def generage_hotmap(data):
+    '''
+    Generate dynamic hotmap with input data and save as a html file.
+    :param data: a 3-d list of [[[latitude, longitude, average_speed]]] for each hour for each location
+    :return: no return
+    '''
+    map_osm = folium.Map(location=[31.2234, 121.4814], zoom_start=10)
+    HeatMapWithTime(data, radius=10).add_to(map_osm)
+    map_osm.save('hotmap.html')
