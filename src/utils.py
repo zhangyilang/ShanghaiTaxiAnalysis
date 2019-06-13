@@ -1,4 +1,6 @@
 import datetime
+
+
 def processTime(line):
     """
     a function for processing the date time data
@@ -21,6 +23,7 @@ def processTime(line):
         t = t = datetime.datetime.strptime(t, '%Y-%m-%d %H:%M:%S')
     line[9] = t
     return line
+
 
 # 下客记录
 def findOff(vec):
@@ -97,6 +100,7 @@ def findOn(vec):
             i = i + 1
     return re
 
+
 def datetime2minute(dt):
     """
     A function for transfer 1 datetime.datetime instance to another datetime.time
@@ -105,4 +109,25 @@ def datetime2minute(dt):
     """
     return datetime.datetime(dt.year,dt.month,dt.day,dt.hour,dt.minute,0)
 
-#downRecord = data.map(lambda line:(line[0],(line[9],float(line[10]),float(line[11]),int(line[3])))).groupByKey().map(lambda x:(x[0],list(x[1]))).mapValues(findOff).flatMap(lambda line:[(line[0],h) for h in line[1]])
+
+def datetime2hour(dt):
+    """
+    A function for transfer 1 datetime.datetime instance to another datetime.time
+    but with minute and second = 0
+    e.g.: datetime2hour(datetime.datetime())
+    """
+    return datetime.datetime(dt.year, dt.month, dt.day, dt.hour, 0, 0)
+
+
+def intensityMap(line):
+    """
+    a functiom to map one record to ((hour,coordinate),1)
+    :param line: a record in rdd
+    :return:
+    """
+    hour = datetime2hour(line[9])
+    lon = round(line[10], 3)
+    lat = round(line[11], 3)
+    #coordinate = (lon, lat)
+    return ((hour, lon, lat), 1)
+

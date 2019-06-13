@@ -23,6 +23,7 @@ os.environ['PYSPARK_DRIVER_PYTHON'] = '/home/bigdatalab24/anaconda3/bin/python'
 default_Start = datetime.datetime.strptime('2018-04-01 00:00:00', '%Y-%m-%d %H:%M:%S')
 default_End = datetime.datetime.strptime('2018-04-01 23:59:59', '%Y-%m-%d %H:%M:%S')
 
+
 class Query:
     def __init__(self):
         # initialize some useful param
@@ -30,6 +31,7 @@ class Query:
         self.default_End = datetime.datetime.strptime('2018-04-01 23:59:59', '%Y-%m-%d %H:%M:%S')
         self.downRecord = None
         self.upRecord = None
+
         # Spark initialization and configuration
         sparkconf = SparkConf().setAppName('MyApp')
         sparkconf.set('spark.executor.memory', '10g')
@@ -54,6 +56,11 @@ class Query:
         print("DataFrame created")
         # df.show(5)
 
+    def __del__(self):
+        # Stop spark context and spark session
+        self.sc.stop()
+        self.spark.stop()
+
     def init_updown(self):
         """
         A initialization function for up records and down records
@@ -69,12 +76,14 @@ class Query:
         self.downRecord = self.data.map(
             lambda line: (line[0], (line[9], float(line[10]), float(line[11]), int(line[3])))).groupByKey().map(
             lambda x: (x[0], list(x[1]))).mapValues(findOff).flatMap(lambda line: [(line[0], h) for h in line[1]])
-        #downrows = downRecord.map(lambda p: Row(car=p[0], Coordinate=p[1][0], downTime=p[1][1],
+        # downrows = downRecord.map(lambda p: Row(car=p[0], Coordinate=p[1][0], downTime=p[1][1],
                                                 #Gap=p[1][2].days * 3600 * 24 + p[1][2].seconds))
-        #self.downRecordDF = self.spark.createDataFrame(downrows)
-        self.upRecord = self.data.map(lambda line:(line[0],(line[9],float(line[10]),float(line[11]),int(line[3])))).groupByKey().map(lambda x:(x[0],list(x[1]))).mapValues(findOn).flatMap(lambda line:[(line[0],h) for h in line[1]])
+        # self.downRecordDF = self.spark.createDataFrame(downrows)
+        self.upRecord = self.data.map(lambda line: (line[0], (line[9], float(line[10]), float(line[11]), int(line[3]))))\
+                        .groupByKey().map(lambda x: (x[0], list(x[1]))).mapValues(findOn)\
+                        .flatMap(lambda line: [(line[0], h) for h in line[1]])
 
-    def GetAverageWaitTime(self,StartTime=default_Start, EndTime=default_End, dl=(0, 0), ur=(180, 90)):
+    def GetAverageWaitTime(self, StartTime=default_Start, EndTime=default_End, dl=(0, 0), ur=(180, 90)):
         """
         StartTime: beginning time, a datetime.datetime instance
         EndTime: ending time, a datetime.datetime instance
@@ -92,13 +101,13 @@ class Query:
                       x[1][0][1] >= dl_lat and x[1][0][1] <= ur_lat).map(lambda line: (line[1][2], 1)).reduce(
             lambda a, b: (a[0] + b[0], a[1] + b[1]))
         re = re[0] / re[1]
-        return (re.days * 3600 * 24 + re.seconds)
+        return re.days * 3600 * 24 + re.seconds
 
     def AverageWaitTimePlot(self,StartTime=default_Start, EndTime=default_End, dl=(0, 0), ur=(180, 90)):
         """
         A function to make a plot of average waiting time in each minute
         """
-        if self.downRecord == None:
+        if self.downRecord is None:
             print('please initialize down and up records first!')
             return None
         dl_lon, dl_lat = dl
@@ -117,7 +126,7 @@ class Query:
         plt.ylabel("Mean Waiting Time(s)")
         plt.show()
 
-    def drawOneCar(self,carNo,path = '/home/bigdatalab24/1.png'):
+    def drawOneCar(self, carNo, path='/home/bigdatalab24/1.png'):
         """
         draw a plot of the track of car carNo in a day
         :param carNo: the number of target car
@@ -144,7 +153,7 @@ class Query:
         fig.savefig(path)
         plt.show()
 
-    def drawAllCars(self,i = 0):
+    def drawAllCars(self, i=0):
         """
         A function to draw a plot of all cars in Shanghai in 1 hour!
         :param i:the target hour accept 0 ~ 23
@@ -187,10 +196,15 @@ class Query:
         result = self.data.filter(lambda x: x[0] == str(carNo) and x[9] >= Start and x[9] <= End).collect()
         return result
 
-    def __del__(self):
-        # Stop spark context and spark session
-        self.sc.stop()
-        self.spark.stop()
+
+    def carHotmap(self):
+        """
+        a function to return data for car intensity hot map
+        :return: 3 order list
+        """
+        norm = 1
+        temp = self.data.map(intensityMap).reduceByKey(lambda a,b: a + b).map(lambda x: (x[0][0],(x[0][1], x[0][2], x[1]/norm))).groupByKey().map(lambda x:[list(h) for h in x[1]]).collect()
+
 
     def average_speed_bar(self, ld=None, ru=None):
         '''
