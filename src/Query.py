@@ -6,7 +6,7 @@ import pyspark.sql.functions as F
 import folium
 from folium.plugins import HeatMapWithTime
 import datetime
-from src.utils import *
+from utils import *
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,9 +41,12 @@ class Query:
         sparkconf.set('spark.driver.maxResultSize', '10g')
         self.sc = SparkContext(conf=sparkconf)
         self.spark = SparkSession.builder.config(conf=sparkconf).getOrCreate()
-        filePath = '../data/HT1804/01/*/*.txt'
+        filePath = '/home/bigdatalab24/BigScalePJ/data/HT1804/01/*/*.txt'
         data = self.sc.textFile(filePath)
         self.data = data
+        self.data = self.data.map(lambda x: x.split('|'))
+        # Process the time data
+        self.data = self.data.map(processTime).filter(lambda x: x[9] != None)
 
         # Creat dataframe
         parts = data.map(lambda x: x.split("|"))
@@ -67,9 +70,9 @@ class Query:
         may take quite some time
         :return: None
         """
-        self.data = self.data.map(lambda x: x.split('|'))
+        #self.data = self.data.map(lambda x: x.split('|'))
         # Process the time data
-        self.data = self.data.map(processTime).filter(lambda x: x[9] != None)
+        #self.data = self.data.map(processTime).filter(lambda x: x[9] != None)
         # may take a lot time here
         self.data = self.data.sortBy(lambda x: x[9])
         # self.downRecord store a data frame of up records
@@ -202,9 +205,10 @@ class Query:
         a function to return data for car intensity hot map
         :return: 3 order list
         """
-        norm = 1
-        temp = self.data.map(intensityMap).reduceByKey(lambda a,b: a + b).map(lambda x: (x[0][0],(x[0][1], x[0][2], x[1]/norm))).groupByKey().map(lambda x:[list(h) for h in x[1]]).collect()
-
+        norm = 10000
+        temp = self.data.map(intensityMap).reduceByKey(lambda a,b: a + b).map(lambda x: (x[0][0],(x[0][2], x[0][1], x[1]/norm))).groupByKey().map(lambda x:[list(h) for h in x[1]]).collect()
+        #print(self.data.map(intensityMap).reduceByKey(lambda a,b: a + b).reduce(lambda a,b:a[1] > b[1] and a or b))
+        return temp
 
     def average_speed_bar(self, ld=None, ru=None):
         '''
@@ -324,6 +328,7 @@ if __name__ == '__main__':
     query = Query()
     # x, y =query.average_occupy_bar()
     # query.plot_bar(x, y, 'time: h', 'average occupy: ratio')
-    data = query.average_speed_hotmap()
+    data = query.carHotmap()
+    print('hot map data created with dimension',len(data),len(data[0]),len(data[0][0]))
     query.generage_hotmap(data)
     del query
