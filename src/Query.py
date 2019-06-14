@@ -7,9 +7,8 @@ from utils import *
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 import numpy as np
-from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.feature import OneHotEncoder, VectorAssembler
 from pyspark.ml.regression import LinearRegression
-from pyspark.ml import Pipeline
 from pyspark.ml.evaluation import RegressionEvaluator
 
 
@@ -315,19 +314,21 @@ class Query:
          coordinate and boarding time.
         '''
         onRecordDF = self.upRecord.map(lambda p: Row(upLon=p[1][0][0], upLat=p[1][0][1],
-                                                     upTime=p[1][1].hour+p[1][1].minute/60,
+                                                     upTime=p[1][1].hour,
                                                      duration=p[1][2].days * 60 * 24 + p[1][2].seconds/60,
                                                      downLon=p[1][3][0], downLat=p[1][3][1]))
         onRecordDF = self.spark.createDataFrame(onRecordDF)
 
         # generate feature vector
-        assembler = VectorAssembler(inputCols=['upLon', 'upLat', 'downLon', 'downLat', 'upTime'], outputCol='features')
-        onRecordDF = assembler.transform(onRecordDF)
-        onRecordDF.show(5)
+        encoder = OneHotEncoder(inputCol='upTime', outputCol='upTime_onehot', dropLast=False)
+        assembler = VectorAssembler(inputCols=['upLon', 'upLat', 'downLon', 'downLat', 'upTime_onehot'], outputCol='features')
+        onRecordDF = assembler.transform(encoder.transform(onRecordDF))
+        # onRecordDF.show(5)
+        # print(onRecordDF.head().features)
         trainSet, validSet, testSet = onRecordDF.randomSplit([7., 1., 2.])
 
         # train model
-        lr = LinearRegression(labelCol='duration', regParam=0.01, maxIter=100)
+        lr = LinearRegression(labelCol='duration', regParam=0.01, maxIter=1000)
         self.model = lr.fit(trainSet)
         train_summary = self.model.summary
         print('RMSE of training:', train_summary.rootMeanSquaredError, 'min')
@@ -343,7 +344,7 @@ class Query:
     def tourTimePredict(self, data):
         '''
         Predict the tour time given data of boarding coordinate, getting off coordinate and boarding time.
-        :param data: [board_lon, board_lat, off_lon, off_lat, board_time]
+        :param data: [board_lon, board_lat, off_lon, off_lat, board_time(onehot vector of hour)]
         :return: prediction of board time of the tour.
         '''
         test = self.spark.createDataFrame([data], ['features'])
