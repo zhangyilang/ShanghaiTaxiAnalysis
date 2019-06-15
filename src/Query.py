@@ -1,21 +1,17 @@
 import os
-import matplotlib.pyplot as plt
 from pyspark import SparkConf, SparkContext
 from pyspark.sql import SQLContext, SparkSession, Row
 import pyspark.sql.functions as F
-import folium
-from folium.plugins import HeatMapWithTime
 import datetime
-from utils import *
+from src.utils import *
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 import numpy as np
-from pylab import mpl
-from matplotlib.collections import PolyCollection
-from matplotlib.patches import Polygon
-import matplotlib.cm as cm
-import pandas as pd
+from pyspark.ml.feature import OneHotEncoder, VectorAssembler
+from pyspark.ml.regression import LinearRegression
+from pyspark.ml.evaluation import RegressionEvaluator
 from matplotlib.animation import FuncAnimation
+
 
 os.environ['PYSPARK_PYTHON'] = '/home/bigdatalab24/anaconda3/bin/python'
 os.environ['PYSPARK_DRIVER_PYTHON'] = '/home/bigdatalab24/anaconda3/bin/python'
@@ -31,6 +27,7 @@ class Query:
         self.default_End = datetime.datetime.strptime('2018-04-01 23:59:59', '%Y-%m-%d %H:%M:%S')
         self.downRecord = None
         self.upRecord = None
+        self.model = None
 
         # Spark initialization and configuration
         sparkconf = SparkConf().setAppName('MyApp')
@@ -46,7 +43,7 @@ class Query:
         self.data = data
         self.data = self.data.map(lambda x: x.split('|'))
         # Process the time data
-        self.data = self.data.map(processTime).filter(lambda x: x[9] != None)
+        self.data = self.data.map(processTime).filter(lambda x: x[9] is not None)
 
         # Creat dataframe
         parts = data.map(lambda x: x.split("|"))
@@ -70,9 +67,9 @@ class Query:
         may take quite some time
         :return: None
         """
-        #self.data = self.data.map(lambda x: x.split('|'))
+        # self.data = self.data.map(lambda x: x.split('|'))
         # Process the time data
-        #self.data = self.data.map(processTime).filter(lambda x: x[9] != None)
+        # self.data = self.data.map(processTime).filter(lambda x: x[9] != None)
         # may take a lot time here
         self.data = self.data.sortBy(lambda x: x[9])
         # self.downRecord store a data frame of up records
@@ -199,25 +196,26 @@ class Query:
         result = self.data.filter(lambda x: x[0] == str(carNo) and x[9] >= Start and x[9] <= End).collect()
         return result
 
-
     def carHotmap(self):
         """
         a function to return data for car intensity hot map
-        :return: 3 order list
+        :return: 3-order list
         """
         norm = 10000
-        temp = self.data.map(intensityMap).reduceByKey(lambda a,b: a + b).map(lambda x: (x[0][0],(x[0][2], x[0][1], x[1]/norm))).groupByKey().map(lambda x:[list(h) for h in x[1]]).collect()
-        #print(self.data.map(intensityMap).reduceByKey(lambda a,b: a + b).reduce(lambda a,b:a[1] > b[1] and a or b))
-        return temp
+        data = self.data.map(intensityMap).reduceByKey(lambda a, b: a + b).map(lambda x: (x[0][0], (x[0][2], x[0][1], x[1] / norm)))\
+               .groupByKey().map(lambda x: [list(h) for h in x[1]]).collect()
+        # print(self.data.map(intensityMap).reduceByKey(lambda a,b: a + b).reduce(lambda a,b:a[1] > b[1] and a or b))
+        return data
 
     def average_speed_bar(self, ld=None, ru=None):
         '''
         A function return the average speed of taxi drivers in Shanghai
         through the whole day within designated geographical range.
         Look up through all the data if one of parameters is None (default).
+        Granularity: hour.
         :param ld: a tuple of (longitude_left, latitude_down)
         :param ru: a tuple of (longitude_right, latitude_up)
-        :return: (x, y) for drawing bars
+        :return: (x, y) for drawing bars.
         '''
         geo_range = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0])
                                    & (self.df.latitude >= ld[1]) & (self.df.latitude <= ru[1]))\
@@ -228,30 +226,38 @@ class Query:
         y = [r['avg(speed)'] for r in data]
         return x, y
 
-    @staticmethod
-    def roundMap_speed(row):
-        # round to 3 decimal places
-        return (row.hour, round(float(row.longitude), 3), round(float(row.latitude), 3)), [row.speed, 1]
-
-    @staticmethod
-    def speedMap(data):
-        (hour, lon, lat), speed = data
-        speed = speed[0] / speed[1] / 30 / 100
-        return hour, [lat, lon, speed]
+    def average_speed_curve(self, ld=None, ru=None):
+        '''
+        A function return the average speed of taxi drivers in Shanghai
+        through the whole day within designated geographical range.
+        Look up through all the data if one of parameters is None (default).
+        Granularity: minute.
+        :param ld: a tuple of (longitude_left, latitude_down)
+        :param ru: a tuple of (longitude_right, latitude_up)
+        :return: (x, y) for drawing curve
+        '''
+        geoRange = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0])
+                                   & (self.df.latitude >= ld[1]) & (self.df.latitude <= ru[1]))\
+            if ld is not None and ru is not None else self.df
+        data = geoRange.select('speed', F.from_unixtime(F.unix_timestamp('time'), 'HH:mm').alias('minute')).dropna()\
+               .groupBy('minute').agg({'speed': 'mean'}).sort('minute').collect()
+        x = list(range(24 * 60))
+        y = [r['avg(speed)'] for r in data]
+        return x, y
 
     def average_speed_hotmap(self, ld=None, ru=None):
         '''
         Hot map version of average speed.
         :param ld:  a tuple of (longitude_left, latitude_down)
         :param ru:  a tuple of (longitude_right, latitude_up)
-        :return: [[[latitude, longitude, average_speed]]] for each hour for each location
+        :return: [[[latitude, longitude, average_speed]]] for each location for each hour
         '''
         geoRange = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0])
                                   & (self.df.latitude >= ld[1]) & (self.df.latitude <= ru[1]))\
             if ld is not None and ru is not None else self.df
         data = geoRange.select('speed', 'longitude', 'latitude', F.from_unixtime(F.unix_timestamp('time'), 'HH').alias('hour'))\
-                .dropna().rdd.map(self.roundMap_speed).reduceByKey(lambda x, y: [x[0] + y[0], x[1] + y[1]])\
-                .map(self.speedMap).groupByKey().map(lambda x: list(x[1])).collect()
+                .dropna().rdd.map(roundMap_speed).reduceByKey(lambda x, y: [x[0] + y[0], x[1] + y[1]])\
+                .map(speedMap).groupByKey().map(lambda x: list(x[1])).collect()
         return data
 
     def average_occupy_bar(self, ld=None, ru=None):
@@ -263,7 +269,6 @@ class Query:
         :param ru: a tuple of (longitude_right, latitude_up)
         :return: (x, y) for drawing bars
         '''
-
         geoRange = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0]) & (self.df.latitude >= ld[1])\
                    & (self.df.latitude <= ru[1])) if ld is not None and ru is not None else self.df
         data = geoRange.select('passenger', F.from_unixtime(F.unix_timestamp('time'), 'HH').alias('hour'))\
@@ -272,63 +277,140 @@ class Query:
         y = [r['avg(passenger)'] for r in data]
         return x, y
 
-    @staticmethod
-    def roundMap_passenger(row):
-        # round to 3 decimal places
-        return (row.hour, round(float(row.longitude), 3), round(float(row.latitude), 3)), [row.passenger, 1]
-
-    @staticmethod
-    def passengerMap(data):
-        (hour, lon, lat), passenger = data
-        passenger = passenger[0] / passenger[1] / 100
-        return hour, [lat, lon, passenger]
+    def average_occupy_curve(self, ld=None, ru=None):
+        '''
+        A function return the average occupied rate of taxis in Shanghai
+        through the whole day within designated geographical range.
+        Look up through all the data if one of parameters is None (default).
+        :param ld: a tuple of (longitude_left, latitude_down)
+        :param ru: a tuple of (longitude_right, latitude_up)
+        :return: (x, y) for drawing bars
+        '''
+        geoRange = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0]) & (self.df.latitude >= ld[1])\
+                   & (self.df.latitude <= ru[1])) if ld is not None and ru is not None else self.df
+        data = geoRange.select('passenger', F.from_unixtime(F.unix_timestamp('time'), 'HH:mm').alias('minute'))\
+                 .dropna().groupBy('minute').agg({'passenger': 'mean'}).sort('minute').collect()
+        x = list(range(24 * 60))
+        y = [r['avg(passenger)'] for r in data]
+        return x, y
 
     def average_occupy_hotmap(self, ld=None, ru=None):
         '''
         Hot map version of taxi occupy ratio.
         :param ld:  a tuple of (longitude_left, latitude_down)
         :param ru:  a tuple of (longitude_right, latitude_up)
-        :return: [[[latitude, longitude, average_speed]]] for each hour for each location
+        :return: [[[latitude, longitude, average_speed]]] for each location for each hour
         '''
         geoRange = self.df.filter((self.df.longitude >= ld[0]) & (self.df.longitude <= ru[0])
                                   & (self.df.latitude >= ld[1]) & (self.df.latitude <= ru[1]))\
             if ld is not None and ru is not None else self.df
         data = geoRange.select('passenger', 'longitude', 'latitude', F.from_unixtime(F.unix_timestamp('time'), 'HH')
-                 .alias('hour')).dropna().rdd.map(self.roundMap_passenger).reduceByKey(lambda x, y: [x[0] + y[0], x[1] + y[1]])\
-                 .map(self.passengerMap).groupByKey().map(lambda x: list(x[1])).collect()
+                 .alias('hour')).dropna().rdd.map(roundMap_passenger).reduceByKey(lambda x, y: [x[0] + y[0], x[1] + y[1]])\
+                 .map(passengerMap).groupByKey().map(lambda x: list(x[1])).collect()
         return data
 
-    def plot_bar(self, x, y, label_x, label_y):
+    def tourTimePredict_train(self):
         '''
-        Plot bar figure using matplotlib.
-        :param x: iterable, data for x axis
-        :param y: iterable, data for y axis
-        :param label_x: str, label for x axis
-        :param label_y: str, label for y axis
-        :return:
+        Train a ridge regression model which could predict the tour time given boarding coordinate, getting off
+         coordinate and boarding time.
         '''
-        plt.bar(x, y)
-        plt.xlabel(label_x)
-        plt.ylabel(label_y)
-        plt.show()
+        onRecordDF = self.upRecord.map(lambda p: Row(upLon=p[1][0][0], upLat=p[1][0][1],
+                                                     upTime=p[1][1].hour,
+                                                     duration=p[1][2].days * 60 * 24 + p[1][2].seconds/60,
+                                                     downLon=p[1][3][0], downLat=p[1][3][1]))
+        onRecordDF = self.spark.createDataFrame(onRecordDF)
 
-    def generage_hotmap(self, data):
+        # generate feature vector
+        encoder = OneHotEncoder(inputCol='upTime', outputCol='upTime_onehot', dropLast=False)
+        assembler = VectorAssembler(inputCols=['upLon', 'upLat', 'downLon', 'downLat', 'upTime_onehot'], outputCol='features')
+        onRecordDF = assembler.transform(encoder.transform(onRecordDF))
+        # onRecordDF.show(5)
+        # print(onRecordDF.head().features)
+        trainSet, validSet, testSet = onRecordDF.randomSplit([7., 1., 2.])
+
+        # train model
+        lr = LinearRegression(labelCol='duration', regParam=0.01, maxIter=1000)
+        self.model = lr.fit(trainSet)
+        train_summary = self.model.summary
+        print('RMSE of training:', train_summary.rootMeanSquaredError, 'min')
+        print('Adjusted R2 of training:', train_summary.r2adj)
+
+        # evaluation
+        evaluator = RegressionEvaluator(labelCol='duration')
+        model_valid = self.model.transform(validSet)
+        print('RMSE on validation set:', evaluator.evaluate(model_valid, {evaluator.metricName: 'rmse'}), 'min')
+        model_valid = self.model.transform(testSet)
+        print('RMSE on test set:', evaluator.evaluate(model_valid, {evaluator.metricName: 'rmse'}), 'min')
+
+    def tourTimePredict(self, data):
         '''
-        Generate dynamic hotmap with input data and save as a html file.
-        :param data: a 3-d list of [[[latitude, longitude, average_speed]]] for each hour for each location
-        :return: no return
+        Predict the tour time given data of boarding coordinate, getting off coordinate and boarding time.
+        :param data: [board_lon, board_lat, off_lon, off_lat, board_time(onehot vector of hour)]
+        :return: prediction of board time of the tour.
         '''
-        map_osm = folium.Map(location=[31.2234, 121.4814], zoom_start=10)
-        HeatMapWithTime(data, radius=10).add_to(map_osm)
-        map_osm.save('hotmap.html')
+        test = self.spark.createDataFrame([data], ['features'])
+        return self.model.transform(test).head().prediction
+
+    def GifMaker(self,start = 0,hours = 12):
+        """
+        A function to generate a gif of all cars in Shang hai
+        :param start:an integer to indicate the starting time
+        :param hours:an integer to indicate how long,no more than 12
+        :return:
+        """
+        try:
+            start = int(start)
+            hours = int(hours)
+        except:
+            print('The parameters need to be integers!')
+            return None
+        if hours > 12:
+            print('Too long to generate!Try a number smaller than 12!')
+            return None
+        if start > 23 or start < 0 or hours < 0 :
+            print('Not valid parameter!')
+            return None
+        start_time = '2018-04-01 '+ str(start).zfill(2) + ':00:00'
+        start_time = datetime.datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
+        result = self.data.filter(lambda x:x[9] >= start_time).map(lambda line:(datetime2hour(line[9]),(line[10],line[11]))).groupByKey().sortBy(lambda x:x[0])
+        result1 = result.take(hours)
+        print(len(result1))
+        print(result1)
+
+        fig = plt.figure(figsize=(15, 15))
+        def update(n):
+            plt.cla()
+            smap = Basemap(projection='merc', resolution='h', area_thresh=0.1, llcrnrlon=121.05, llcrnrlat=31.002,
+                           urcrnrlon=121.9128, urcrnrlat=31.4466)
+            smap.drawcoastlines()
+            smap.drawcountries()
+            smap.drawlsmask(land_color='slategray', ocean_color='slategray', lakes=True)
+            # x,y = smap(0,0)
+            # point = smap.scatter(x,y,color='red',s=0.0001,alpha=0.1)
+            re = result1[n][1]
+            print(len(re))
+            lon = [h[0] for h in re]
+            lat = [h[1] for h in re]
+            lon, lat = smap(np.array(lon), np.array(lat))
+            # point.set_data(lon,lat)
+            smap.scatter(lon, lat, color='red', s=0.001, alpha=0.1)
+            return smap,
+        ani = FuncAnimation(fig, update, frames=len(result1), blit=False)
+        path = '/home/bigdatalab24/cars.gif'
+        ani.save(path, writer='pillow', fps=1)
+        plt.show()
 
 
 if __name__ == '__main__':
     # tests
     query = Query()
-    # x, y =query.average_occupy_bar()
-    # query.plot_bar(x, y, 'time: h', 'average occupy: ratio')
-    data = query.carHotmap()
-    print('hot map data created with dimension',len(data),len(data[0]),len(data[0][0]))
-    query.generage_hotmap(data)
+    # x, y = query.average_occupy_bar()
+    # plot_bar(x, y, 'time: h', 'average occupy: ratio')
+    # x, y = query.average_speed_curve()
+    # plot_curve(x, y, 'time: minute', 'average speed')
+    # data = query.carHotmap()
+    # generage_hotmap(data)
+    #query.init_updown()
+    #query.tourTimePredict_train()
+    query.GifMaker(start=0,hours=12)
     del query
