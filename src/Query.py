@@ -313,22 +313,23 @@ class Query:
         Train a ridge regression model which could predict the tour time given boarding coordinate, getting off
          coordinate and boarding time.
         '''
-        onRecordDF = self.upRecord.map(lambda p: Row(upLon=p[1][0][0], upLat=p[1][0][1],
-                                                     upTime=p[1][1].hour,
-                                                     duration=p[1][2].days * 60 * 24 + p[1][2].seconds/60,
-                                                     downLon=p[1][3][0], downLat=p[1][3][1]))
+        # The high 4 numbers of upCoord is longitude and the low 3 numbers is latitude
+        onRecordDF = self.upRecord.filter(lambda p: (p[1][0][0] >= 120.5) & (p[1][0][0] <= 122.1) &
+                                                    (p[1][0][1] >= 30.4) & (p[1][0][1] <= 31.5))\
+                         .map(lambda p: Row(upCoord=int((round(p[1][0][0], 1) - 120.5) * 10 * 12 + (round(p[1][0][1], 1) - 30.4) * 10),
+                                            upTime=p[1][1].hour, duration=p[1][2].days * 60 * 24 + p[1][2].seconds/60,
+                                            manhLon=abs(p[1][3][0] - p[1][0][0]), manhLat=abs(p[1][3][1] - p[1][0][1])))
         onRecordDF = self.spark.createDataFrame(onRecordDF)
 
         # generate feature vector
-        encoder = OneHotEncoder(inputCol='upTime', outputCol='upTime_onehot', dropLast=False)
-        assembler = VectorAssembler(inputCols=['upLon', 'upLat', 'downLon', 'downLat', 'upTime_onehot'], outputCol='features')
-        onRecordDF = assembler.transform(encoder.transform(onRecordDF))
-        # onRecordDF.show(5)
-        # print(onRecordDF.head().features)
+        encoder_time = OneHotEncoder(inputCol='upTime', outputCol='upTime_onehot', dropLast=False)
+        encoder_coord = OneHotEncoder(inputCol='upCoord', outputCol='upCoord_onehot', dropLast=False)
+        assembler = VectorAssembler(inputCols=['upTime_onehot', 'upCoord_onehot', 'manhLon', 'manhLat'], outputCol='features')
+        onRecordDF = assembler.transform(encoder_coord.transform(encoder_time.transform(onRecordDF)))
         trainSet, validSet, testSet = onRecordDF.randomSplit([7., 1., 2.])
 
         # train model
-        lr = LinearRegression(labelCol='duration', regParam=0.01, maxIter=1000)
+        lr = LinearRegression(labelCol='duration', regParam=0.01, maxIter=100)
         self.model = lr.fit(trainSet)
         train_summary = self.model.summary
         print('RMSE of training:', train_summary.rootMeanSquaredError, 'min')
@@ -344,7 +345,7 @@ class Query:
     def tourTimePredict(self, data):
         '''
         Predict the tour time given data of boarding coordinate, getting off coordinate and boarding time.
-        :param data: [board_lon, board_lat, off_lon, off_lat, board_time(onehot vector of hour)]
+        :param data: [upCoord_onehot, manh_lon, manh_lat, upTime_onehot]
         :return: prediction of board time of the tour.
         '''
         test = self.spark.createDataFrame([data], ['features'])
