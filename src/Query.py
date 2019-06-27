@@ -355,12 +355,23 @@ class Query:
 if __name__ == '__main__':
     # tests
     query = Query()
-    # x, y = query.average_occupy_bar()
-    # plot_bar(x, y, 'time: h', 'average occupy: ratio')
-    # x, y = query.average_speed_curve()
-    # plot_curve(x, y, 'time: minute', 'average speed')
-    # data = query.carHotmap()
-    # generage_hotmap(data)
-    query.init_updown()
-    query.tourTimePredict_train()
-    del query
+    x, y = query.average_speed_curve()
+    plot_curve(x, y, 'time: minute', 'average speed', name='average_speed_curve')
+
+    x, y = query.average_speed_bar()
+    plot_bar(x, y, 'time: h', 'average speed: ratio', name='average_speed_bar')
+
+    data = query.average_speed_hotmap()
+    generate_hotmap(data, name='average_speed_hotmap')
+
+    x, y = query.average_occupy_curve()
+    plot_curve(x, y, 'time: h', 'average occupied rate', name='average_occupy_curve')
+
+    x, y = query.average_occupy_bar()
+    plot_bar(x, y, 'time: h', 'average occupy: ratio', name='average_occupy_bar')
+
+    data = query.average_occupy_hotmap()
+    generate_hotmap(data, name='average_occupy_hotmap')
+
+    data = query.carHotmap()
+    generate_hotmap(data, name='car_hotmap')

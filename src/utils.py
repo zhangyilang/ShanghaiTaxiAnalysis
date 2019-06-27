@@ -166,42 +166,49 @@ def tourTimeMap(record):
     return LabeledPoint(label, features)
 
 
-def plot_curve(x, y, label_x, label_y):
+def plot_curve(x, y, label_x, label_y, name):
     '''
-    Plot broken line figure with matplotlib. Used for granularity of minute.
-    :param x:
-    :param y:
-    :param label_x:
-    :param label_y:
+    Plot broken line curve with matplotlib in granularity of minute.
+    :param x: iterable, data for x axis
+    :param y: iterable, data for y axis
+    :param label_x: str, label for x axis
+    :param label_y: str, label for y axis
+    :param name: a str
     :return:
     '''
     plt.plot(x, y)
     plt.xlabel(label_x)
     plt.ylabel(label_y)
     plt.show()
+    fig = plt.gcf()
+    fig.savefig(name)
 
 
-def plot_bar(x, y, label_x, label_y):
+def plot_bar(x, y, label_x, label_y, name):
     '''
-    Plot bar figure with matplotlib. Used for granularity of hour.
+    Plot bar figure with matplotlib in granularity of hour.
     :param x: iterable, data for x axis
     :param y: iterable, data for y axis
     :param label_x: str, label for x axis
     :param label_y: str, label for y axis
+    :param name: a str
     :return:
     '''
     plt.bar(x, y)
     plt.xlabel(label_x)
     plt.ylabel(label_y)
     plt.show()
+    fig = plt.gcf()
+    fig.savefig(name)
 
 
-def generage_hotmap(data):
+def generate_hotmap(data, name):
     '''
     Generate dynamic hotmap with input data and save as a html file.
     :param data: a 3-d list of [[[latitude, longitude, average_speed]]] for each hour for each location
+    :param name: a str
     :return: no return
     '''
     map_osm = folium.Map(location=[31.2234, 121.4814], zoom_start=10)
     HeatMapWithTime(data, radius=10).add_to(map_osm)
-    map_osm.save('hotmap.html')
+    map_osm.save(name + '.html')
