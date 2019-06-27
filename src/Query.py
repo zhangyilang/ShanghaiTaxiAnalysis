@@ -55,6 +55,9 @@ class Query:
         print("DataFrame created")
         # df.show(5)
 
+        # initialization
+        self.init_updown()
+
     def __del__(self):
         # Stop spark context and spark session
         self.sc.stop()
@@ -90,7 +93,7 @@ class Query:
         ur: the coordinate of the upright point
         return the average taxi waiting time during this period and in this field
         """
-        if self.downRecord == None:
+        if self.downRecord is None:
             print('please initialize down and up records first!')
             return None
         dl_lon, dl_lat = dl
@@ -102,7 +105,7 @@ class Query:
         re = re[0] / re[1]
         return re.days * 3600 * 24 + re.seconds
 
-    def AverageWaitTimePlot(self,StartTime=default_Start, EndTime=default_End, dl=(0, 0), ur=(180, 90)):
+    def AverageWaitTimePlot(self, StartTime=default_Start, EndTime=default_End, dl=(0, 0), ur=(180, 90)):
         """
         A function to make a plot of average waiting time in each minute
         """
@@ -118,14 +121,10 @@ class Query:
             lambda a, b: (a[0] + b[0], a[1] + b[1])).sortBy(lambda x: x[0]).collect()
         times = [t[0] for t in re]
         wait_times = [t[1][0].total_seconds() / (t[1][1] + 0.0001) for t in re]
-        # print(times)
-        # print(wait_times)
-        plt.plot(times, wait_times)
-        plt.xlabel("Time")
-        plt.ylabel("Mean Waiting Time(s)")
+        plot_curve(times, wait_times, 'time: h', 'Average waiting time: s', 'average_waiting_time_curve')
         plt.show()
 
-    def drawOneCar(self, carNo, path='/home/bigdatalab24/1.png'):
+    def drawOneCar(self, carNo, path='one_car.png'):
         """
         draw a plot of the track of car carNo in a day
         :param carNo: the number of target car
@@ -354,24 +353,39 @@ class Query:
 
 if __name__ == '__main__':
     # tests
+
+    # parameters examples
+    start_time = datetime.datetime.strptime('2018-04-01 00:00:00', '%Y-%m-%d %H:%M:%S')
+    end_time = datetime.datetime.strptime('2018-04-01 23:59:59', '%Y-%m-%d %H:%M:%S')
+    leftdown = (0, 0)
+    upright = (180, 90)
+
     query = Query()
-    x, y = query.average_speed_curve()
-    plot_curve(x, y, 'time: minute', 'average speed', name='average_speed_curve')
 
-    x, y = query.average_speed_bar()
-    plot_bar(x, y, 'time: h', 'average speed: ratio', name='average_speed_bar')
+    query.AverageWaitTimePlot(start_time, end_time, leftdown, upright)
 
-    data = query.average_speed_hotmap()
-    generate_hotmap(data, name='average_speed_hotmap')
+    query.drawOneCar(20122, 'one_car.png')
 
-    x, y = query.average_occupy_curve()
-    plot_curve(x, y, 'time: h', 'average occupied rate', name='average_occupy_curve')
-
-    x, y = query.average_occupy_bar()
-    plot_bar(x, y, 'time: h', 'average occupy: ratio', name='average_occupy_bar')
-
-    data = query.average_occupy_hotmap()
-    generate_hotmap(data, name='average_occupy_hotmap')
+    for i in range(24):         # 最后会生成 all_cars.gif
+        query.drawAllCars(i)
 
     data = query.carHotmap()
-    generate_hotmap(data, name='car_hotmap')
+    generate_hotmap(data, name='car_hotmap.html')
+
+    x, y = query.average_speed_curve(leftdown, upright)
+    plot_curve(x, y, 'time: minute', 'average speed', name='average_speed_curve.png')
+
+    x, y = query.average_speed_bar(leftdown, upright)
+    plot_bar(x, y, 'time: h', 'average speed: ratio', name='average_speed_bar.png')
+
+    data = query.average_speed_hotmap(leftdown, upright)
+    generate_hotmap(data, name='average_speed_hotmap.html')
+
+    x, y = query.average_occupy_curve(leftdown, upright)
+    plot_curve(x, y, 'time: h', 'average occupied rate', name='average_occupy_curve.png')
+
+    x, y = query.average_occupy_bar(leftdown, upright)
+    plot_bar(x, y, 'time: h', 'average occupy: ratio', name='average_occupy_bar.png')
+
+    data = query.average_occupy_hotmap(leftdown, upright)
+    generate_hotmap(data, name='average_occupy_hotmap.html')

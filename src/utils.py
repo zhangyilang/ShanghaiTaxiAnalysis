@@ -211,4 +211,4 @@ def generate_hotmap(data, name):
     '''
     map_osm = folium.Map(location=[31.2234, 121.4814], zoom_start=10)
     HeatMapWithTime(data, radius=10).add_to(map_osm)
-    map_osm.save(name + '.html')
+    map_osm.save(name)
