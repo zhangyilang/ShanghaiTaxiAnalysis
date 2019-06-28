@@ -344,11 +344,19 @@ class Query:
     def tourTimePredict(self, data):
         '''
         Predict the tour time given data of boarding coordinate, getting off coordinate and boarding time.
-        :param data: [upCoord_onehot, manh_lon, manh_lat, upTime_onehot]
+        :param data: [upCoord, downCoord, upTime]
         :return: prediction of board time of the tour.
         '''
-        test = self.spark.createDataFrame([data], ['features'])
-        return self.model.transform(test).head().prediction
+        upCoord, downCoord, upTime = data
+        upCoord_idx = int((round(upCoord[1][0][0], 1) - 120.5) * 10 * 12 + (round(upCoord[1][0][1], 1) - 30.4) * 10)
+        manhLon = abs(upCoord[0] - downCoord[0])
+        manhLat = abs(upCoord[0] - downCoord[0])
+        test = self.spark.createDataFrame([upTime, upCoord_idx, manhLon, manhLat], ['upTime', 'upCoord', 'manhLon', manhLat])
+        encoder_time = OneHotEncoder(inputCol='upTime', outputCol='upTime_onehot', dropLast=False)
+        encoder_coord = OneHotEncoder(inputCol='upCoord', outputCol='upCoord_onehot', dropLast=False)
+        assembler = VectorAssembler(inputCols=['upTime_onehot', 'upCoord_onehot', 'manhLon', 'manhLat'], outputCol='features')
+        testDF = assembler.transform(encoder_coord.transform(encoder_time.transform(test)))
+        return self.model.transform(testDF).head().prediction
 
 
 if __name__ == '__main__':
@@ -366,7 +374,7 @@ if __name__ == '__main__':
 
     query.drawOneCar(20122, 'one_car.png')
 
-    for i in range(24):         # 最后会生成 all_cars.gif
+    for i in range(24):         # for all_cars.gif
         query.drawAllCars(i)
 
     data = query.carHotmap()
@@ -382,10 +390,13 @@ if __name__ == '__main__':
     generate_hotmap(data, name='average_speed_hotmap.html')
 
     x, y = query.average_occupy_curve(leftdown, upright)
-    plot_curve(x, y, 'time: h', 'average occupied rate', name='average_occupy_curve.png')
+    plot_curve(x, y, 'time: minute', 'average occupied rate', name='average_occupy_curve.png')
 
     x, y = query.average_occupy_bar(leftdown, upright)
     plot_bar(x, y, 'time: h', 'average occupy: ratio', name='average_occupy_bar.png')
 
     data = query.average_occupy_hotmap(leftdown, upright)
     generate_hotmap(data, name='average_occupy_hotmap.html')
+
+    query.tourTimePredict_train()
+    query.tourTimePredict([(121.05, 31.002), (121.0586, 31.6751), datetime.datetime.strptime('17:00', '%H:%M')])

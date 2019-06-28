@@ -1,0 +1,83 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+		<meta charset="utf-8">
+		<link href="/static/css/style.css" rel='stylesheet' type='text/css' />
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script type="application/x-javascript"> addEventListener("load", function() { setTimeout(hideURLbar, 0); }, false); function hideURLbar(){ window.scrollTo(0,1); } </script>
+		<!--webfonts-->
+		<!--//webfonts-->
+</head>
+<body>
+	<div class="main">
+		<div class="header" >
+			<h1>上海出租车数据分析</h1>
+		</div>
+		<p></p>
+			<form action="i6o" method="post">
+				{% csrf_token %}
+				<ul class="left-form">
+
+
+					<h2>起点:</h2>
+					<li>
+						<input type="text"   placeholder="起点"  required/>
+
+						<div class="clear"> </div>
+					</li>
+
+					<h2>终点:</h2>
+
+					<li>
+						<input type="text"   placeholder="终点"  required/>
+
+						<div class="clear"> </div>
+					</li>
+
+					<h2>上车时间:</h2>
+
+					<li>
+						<input type="text"   placeholder="上车时间"  required/>
+
+						<div class="clear"> </div>
+					</li>
+
+
+
+
+
+				</ul>
+				<ul class="right-form">
+
+
+					<h2>预测结果:</h2>
+
+					<li>
+						<h2>{{b}}</h2>
+
+						<div class="clear"> </div>
+
+					</li>
+
+
+				</ul>
+				<div class="clear"> </div>
+				<ul class="right-form">
+
+
+					<input type="submit" onClick="myFunction()" value="确认">
+
+				</ul>
+				<div class="clear"> </div>
+
+			</form>
+
+		</div>
+			<!-----start-copyright---->
+
+				<!-----//end-copyright---->
+
+
+</body>
+</html>
