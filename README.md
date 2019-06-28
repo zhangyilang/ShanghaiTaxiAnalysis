@@ -2,8 +2,6 @@
 
 李泽君 16307130257  张奕朗 16307130242  崔铃钰 16307130297
 
-github: https://github.com/zhangyilang/ShanghaiTaxiAnalysis
-
 
 
 ### 1 引言
