@@ -1,0 +1,78 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+		<meta charset="utf-8">
+		<link href="/static/css/style.css" rel='stylesheet' type='text/css' />
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script type="application/x-javascript"> addEventListener("load", function() { setTimeout(hideURLbar, 0); }, false); function hideURLbar(){ window.scrollTo(0,1); } </script>
+		<!--webfonts-->
+		<!--//webfonts-->
+</head>
+<body>
+	<div class="main">
+		<div class="header" >
+			<h1>上海出租车数据分析</h1>
+		</div>
+		<p></p>
+			<form action="2" method="post">
+				{% csrf_token%}
+				<ul class="right-form">
+					<input type="submit" onClick="myFunction()" value="单车辆轨迹查询">
+				</ul>
+
+				<div class="clear"> </div>
+
+			</form>
+			<form action="3" method="post">
+				{% csrf_token%}
+				<ul class="right-form">
+
+					<input type="submit" onClick="myFunction()" value="全车辆相关信息查询">
+
+				</ul>
+
+				<div class="clear"> </div>
+			</form>
+
+			<form action="4" method="post">
+				{% csrf_token%}
+				<ul class="right-form">
+					<input type="submit" onClick="myFunction()" value="区域平均速度查询">
+				</ul>
+
+				<div class="clear"> </div>
+
+			</form>
+
+			<form action="5" method="post">
+				{% csrf_token%}
+				<ul class="right-form">
+					<input type="submit" onClick="myFunction()" value="区域平均占用率查询">
+
+				</ul>
+
+				<div class="clear"> </div>
+
+			</form>
+
+			<form action="6" method="post">
+				{% csrf_token%}
+				<ul class="right-form">
+					<input type="submit" onClick="myFunction()" value="出行时间预测">
+
+				</ul>
+
+				<div class="clear"> </div>
+
+			</form>
+
+
+		</div>
+			<!-----start-copyright---->
+
+				<!-----//end-copyright---->
+
+	
+</body>
+</html>

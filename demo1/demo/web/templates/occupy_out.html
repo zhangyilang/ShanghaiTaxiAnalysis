@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+		<meta charset="utf-8">
+		<link href="/static/css/style.css" rel='stylesheet' type='text/css' />
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script type="application/x-javascript"> addEventListener("load", function() { setTimeout(hideURLbar, 0); }, false); function hideURLbar(){ window.scrollTo(0,1); } </script>
+		<!--webfonts-->
+		<!--//webfonts-->
+</head>
+<body>
+	<div class="main">
+		<div class="header" >
+			<h1>上海出租车数据分析</h1>
+		</div>
+		<p></p>
+			<form action="i5o" method="post">
+				{% csrf_token %}
+				<ul class="left-form">
+
+
+					<h2>平均占用率曲线图:</h2>
+
+					<img src="/static/images/average_occupy_curve.png" width="400" height="300">
+
+
+
+                <div class="clear"> </div>
+
+				</ul>
+				<ul class="right-form">
+
+					<h2>平均占用率柱状图:</h2>
+
+					<img src="/static/images/average_occupy_bar.png" width="400" height="300">
+
+
+
+				</ul>
+				<div class="clear"> </div>
+
+			</form>
+
+			<form action="8" method="post">
+
+				<ul class="right-form">
+
+					<input type="submit" onClick="myFunction()" value="点击查看平均占用率hotmap">
+
+
+				</ul>
+				<div class="clear"> </div>
+
+			</form>
+
+
+		</div>
+			<!-----start-copyright---->
+
+				<!-----//end-copyright---->
+
+
+</body>
+</html>
